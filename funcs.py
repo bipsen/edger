@@ -1,3 +1,5 @@
+"""Logic for converting pandas dataframe to gexf."""
+
 from itertools import chain
 import numpy as np
 from scipy import sparse
@@ -5,45 +7,60 @@ import networkx as nx
 
 
 def edger(df, node, link, graphtype, attr_cols, node_sep, link_sep, file_path):
+    """Main function. Called buy GUI, and can be used standalone by supplying a
+    pandas dataframe and relevant attributes."""
 
     df = clean(df, node, link, graphtype, node_sep, link_sep)
 
     if graphtype == 'normal':
-        SZS = np.fromiter(chain((0,), map(len, df[link])),
-                          int, len(df[link])+1).cumsum()
+        indptr = np.fromiter(chain((0,), map(len, df[link])),
+                             int, len(df[link])+1).cumsum()
         unq, idx = np.unique(np.concatenate(df[link]), return_inverse=True)
-        S = sparse.csr_matrix((np.ones(idx.size, int), idx,
-                               SZS), (len(df[link]), len(unq)))
-        SS = (S@S.T).tocoo()
-        G = nx.convert_matrix.from_scipy_sparse_matrix(SS)
+        node_link_matrix = sparse.csr_matrix(
+            (np.ones(idx.size, int), idx, indptr),
+            (len(df[link]),
+             len(unq))
+        )
+        node_node_matrix = (node_link_matrix@node_link_matrix.T).tocoo()
+        G = nx.convert_matrix.from_scipy_sparse_matrix(node_node_matrix)
         labels = df[node]
 
     if graphtype == 'citation':
-        SZS = np.fromiter(chain((0,), map(len, df[link])),
-                          int, len(df[link])+1).cumsum()
+        indptr = np.fromiter(chain((0,), map(len, df[link])),
+                             int, len(df[link])+1).cumsum()
         unq = np.unique(df[node])
         idx = np.where(np.concatenate(df[link])[:, None] == unq[None, :])[1]
-        SS = sparse.csr_matrix((np.ones(np.concatenate(df[link]).size, int),
-                                idx, SZS), (len(df[link]), len(unq))).rint()
+        node_node_matrix = sparse.csr_matrix(
+            (np.ones(np.concatenate(df[link]).size, int), idx, indptr),
+            (len(df[link]),
+             len(unq))
+        ).rint()
         G = nx.convert_matrix.from_scipy_sparse_matrix(
-            SS, create_using=nx.DiGraph)
+            node_node_matrix, create_using=nx.DiGraph)
         labels = df[node]
 
     if graphtype == 'bipartite':
-        SZS1 = np.fromiter(chain((0,), map(len, df[node])),
-                           int, len(df[node])+1).cumsum()
+        indptr1 = np.fromiter(chain((0,), map(len, df[node])),
+                              int, len(df[node])+1).cumsum()
         unq, idx = np.unique(np.concatenate(df[node]), return_inverse=True)
-        S1 = sparse.csr_matrix((np.ones(idx.size, int), idx,
-                                SZS1), (len(df[node]), len(unq)))
+        node1_matrix = sparse.csr_matrix(
+            (np.ones(idx.size, int), idx, indptr1),
+            (len(df[node]),
+             len(unq))
+        )
 
-        SZS2 = np.fromiter(chain((0,), map(len, df[link])),
-                           int, len(df[link])+1).cumsum()
+        indptr2 = np.fromiter(chain((0,), map(len, df[link])),
+                              int, len(df[link])+1).cumsum()
         unq, idx = np.unique(np.concatenate(df[link]), return_inverse=True)
-        S2 = sparse.csr_matrix((np.ones(idx.size, int), idx,
-                                SZS2), (len(df[link]), len(unq)))
+        node2_matrix = sparse.csr_matrix(
+            (np.ones(idx.size, int), idx, indptr2),
+            (len(df[link]),
+             len(unq))
+        )
 
-        SS = (S1.T@S2).tocoo()
-        G = nx.algorithms.bipartite.matrix.from_biadjacency_matrix(SS)
+        node1_node2_matrix = (node1_matrix.T@node2_matrix).tocoo()
+        G = nx.algorithms.bipartite.matrix.from_biadjacency_matrix(
+            node1_node2_matrix)
         labels = np.concatenate([np.unique(np.concatenate(df[node])),
                                  np.unique(np.concatenate(df[link]))])
 
@@ -74,6 +91,7 @@ def edger(df, node, link, graphtype, attr_cols, node_sep, link_sep, file_path):
 
 
 def clean(df, node, link, graphtype, node_sep, link_sep):
+    """Cleans the dataframe"""
     if node_sep:
         df[node] = df[node].str.split(node_sep)
     if link_sep:

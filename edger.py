@@ -1,3 +1,5 @@
+"""Tkinter-based GUI"""
+
 import funcs
 import tkinter as tk
 from tkinter import Tk, filedialog, END, MULTIPLE
@@ -152,6 +154,7 @@ class App:
         )
         if filename:
             self.lbl_info["text"] = f'Success! Saved to {filename}'
+            self.btn_file.configure(state="disabled")
 
 
 if __name__ == "__main__":
